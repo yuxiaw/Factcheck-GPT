@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decontextualizer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" />
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #container {
+            display: flex;
+            width: 80%;
+        }
+
+        #left {
+            width: 50%;
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            padding-right: 1rem;
+        }
+
+        #right {
+            width: 50%;
+            padding-left: 1rem;
+        }
+
+        .highlight {
+            background-color: rgba(255, 235, 59, 0.5);
+        }
+
+        .sentence {
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+        }
+
+        .claim {
+            display: grid;
+        }
+
+        .claim-header {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .flex {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 10px;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="left">
+            <h5 id="example-id"></h5>
+            <p id="prompt"></p>
+            <div id="sentences"></div>
+            <p>Please upload a generated result json.</p>
+            <div class="file-field input-field">
+                <div class="btn">
+                    <span>Upload</span>
+                    <input id="fileUpload" type="file" />
+                </div>
+                <div class="file-path-wrapper">
+                    <input class="file-path validate" type="text" placeholder="Upload a JSON file" />
+                </div>
+            </div>
+        </div>
+        <div id="right">
+            <p>Plase select a sentence by clicking it on the left.</p>
+            <p id="selected-sentence"></p>
+            <input id="selected-sentence-decontext" type="text" placeholder="Decontextualized sentence" disabled />
+            <button id="copy-button" class="btn waves-effect waves-light">
+                Copy
+            </button>
+            <p>Is this sentence the most important one to answer the question?</p>
+            <label id="important-check-label-yes">
+                <input name="important-check" type="radio" value="yes" disabled />
+                <span>Yes</span>
+            </label>
+            <label id="important-check-label-intermediate">
+                <input name="important-check" type="radio" value="intermediate" disabled />
+                <span>No, intermediate</span>
+            </label>
+            <label id="important-check-label-no">
+                <input name="important-check" type="radio" value="no" disabled />
+                <span>No, not important</span>
+            </label>
+            <p>Does the sentence contain statements requiring fact-checking (checkworthy)?</p>
+            <label id="fact-check-label-yes">
+                <input id="fact-check-yes" name="fact-check" type="radio" value="yes" disabled />
+                <span>Yes</span>
+            </label>
+            <label id="fact-check-label-opinion">
+                <input id="fact-check-opinion" name="fact-check" type="radio" value="opinion" disabled />
+                <span>Opinion</span>
+            </label>
+            <label id="fact-check-label-not-a-claim">
+                <input id="fact-check-not-a-claim" name="fact-check" type="radio" value="not_a_claim" disabled />
+                <span>Not a Claim (e.g. a question)</span>
+            </label>
+            <label id="fact-check-label-other">
+                <input id="fact-check-other" name="fact-check" type="radio" value="other" disabled />
+                <span>Other (e.g. I'm a language model...)</span>
+            </label>
+
+            <!-- add a broad dark line for better illustration -->
+            <hr style="border: 1px solid rgba(0, 0, 0, 0.1); margin: 1rem 0" />
+
+            <p>Please add claims if you see any.</p>
+            <div id="claims"></div>
+
+            <button id="add-claim-button" class="btn waves-effect waves-light" disabled>Add Claim</button>
+            <button id="save-button" class="btn waves-effect waves-light" disabled>
+                Save
+            </button>
+            <p id="error-message" style="color: red"></p>
+            <button id="download-json" class="btn waves-effect waves-light" disabled>
+                Download Combined JSON
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+        var fileName = ''
+        document
+            .getElementById("fileUpload")
+            .addEventListener("change", function (event) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+
+                fileName = file.name.substring(0, file.name.lastIndexOf('.'));
+
+                reader.onload = function (e) {
+                    const content = JSON.parse(e.target.result);
+                    handleFileContent(content);
+                };
+
+                reader.readAsText(file);
+            });
+
+        function handleFileContent(content) {
+            document.getElementById(
+                "example-id"
+            ).textContent = `Example ${content.id}`;
+            document.getElementById("prompt").textContent = content.prompt;
+            const sentences = content.sentences;
+            const atomicClaims = content["atomic claims"];
+            let sentenceClaims = [];
+
+            const leftDiv = document.getElementById("sentences");
+            let currentSentenceId = "";
+
+            sentences.forEach((sentence, index) => {
+                const sentenceId = `sentence${index + 1}`;
+                const p = document.createElement("p");
+                p.textContent = `${index + 1}. ${sentence.trim()}`;
+                p.id = sentenceId;
+                p.classList.add("sentence");
+                p.onclick = () => {
+                    document.getElementById(
+                        "selected-sentence-decontext"
+                    ).disabled = false;
+                    document
+                        .getElementById("important-check-label-yes")
+                        .getElementsByTagName("input")[0].disabled = false;
+                    document
+                        .getElementById("important-check-label-intermediate")
+                        .getElementsByTagName("input")[0].disabled = false;
+                    document
+                        .getElementById("important-check-label-no")
+                        .getElementsByTagName("input")[0].disabled = false;
+                    document
+                        .getElementById("fact-check-label-yes")
+                        .getElementsByTagName("input")[0].disabled = false;
+                    document
+                        .getElementById("fact-check-label-opinion")
+                        .getElementsByTagName("input")[0].disabled = false;
+                    document
+                        .getElementById("fact-check-label-not-a-claim")
+                        .getElementsByTagName("input")[0].disabled = false;
+                    document
+                        .getElementById("fact-check-label-other")
+                        .getElementsByTagName("input")[0].disabled = false;
+
+                    // clear the content of the decontext input box and the fact check radio buttons if we click on a new sentence
+                    document.getElementById("selected-sentence-decontext").value = "";
+                    document
+                        .getElementById("important-check-label-yes")
+                        .getElementsByTagName("input")[0].checked = false;
+                    document
+                        .getElementById("important-check-label-intermediate")
+                        .getElementsByTagName("input")[0].checked = false;
+                    document
+                        .getElementById("important-check-label-no")
+                        .getElementsByTagName("input")[0].checked = false;
+                    document
+                        .getElementById("fact-check-label-yes")
+                        .getElementsByTagName("input")[0].checked = false;
+                    document
+                        .getElementById("fact-check-label-opinion")
+                        .getElementsByTagName("input")[0].checked = false;
+                    document
+                        .getElementById("fact-check-label-not-a-claim")
+                        .getElementsByTagName("input")[0].checked = false;
+                    document
+                        .getElementById("fact-check-label-other")
+                        .getElementsByTagName("input")[0].checked = false;
+
+                    document.getElementById("save-button").disabled = true;
+
+                    if (currentSentenceId) {
+                        document
+                            .getElementById(currentSentenceId)
+                            .classList.remove("highlight");
+                    }
+                    p.classList.add("highlight");
+                    currentSentenceId = sentenceId;
+                    document.getElementById("selected-sentence").textContent =
+                        p.textContent;
+
+                    const sentenceClaimsId = p.textContent.charAt(0) - 1;
+                    sentenceClaims = atomicClaims[sentenceClaimsId];
+
+                    document.getElementById("claims").innerHTML = "";
+                    claims = {};
+
+                };
+                leftDiv.appendChild(p);
+            });
+
+            let claims = {};
+            const args = {};
+            const sentencesData = {};
+
+            document
+                .getElementById("save-button")
+                .addEventListener("click", function () {
+                    args["decontext"] = document.getElementById(
+                        "selected-sentence-decontext"
+                    ).value;
+                    args["factCheck"] = document.querySelector(
+                        'input[name="fact-check"]:checked'
+                    ).value;
+                    args["importantCheck"] = document.querySelector(
+                        'input[name="important-check"]:checked'
+                    ).value;
+                    args["mostImportantClaim"] = [];
+                    saveData(currentSentenceId);
+                });
+
+            document
+                .getElementById("fact-check-yes")
+                .addEventListener("click", function () {
+                    if (document.querySelector(
+                        'input[name="important-check"]:checked'
+                    ) === null) {
+                        document.getElementById("save-button").disabled = true;
+                    } else {
+                        document.getElementById("save-button").disabled = false;
+                    }
+                    document.getElementById('add-claim-button').disabled = false;
+                    sentenceClaims.forEach((claim, index) => {
+                        drawClaims(claim);
+                    });
+                });
+
+            document
+                .getElementById("add-claim-button")
+                .addEventListener("click", function () {
+                    drawClaims(null);
+                });
+
+            const factCheckRadioButtons = document.querySelectorAll('input[name="fact-check"]');
+            factCheckRadioButtons.forEach(radioButton => {
+                if (radioButton.value !== 'yes') {
+                    radioButton.addEventListener("click", function () {
+                        if (document.querySelector(
+                            'input[name="important-check"]:checked'
+                        ) === null) {
+                            document.getElementById("save-button").disabled = true;
+                        } else {
+                            document.getElementById("save-button").disabled = false;
+                        }
+                        document.getElementById('add-claim-button').disabled = true;
+                        document.getElementById("claims").innerHTML = "";
+                        claims = {};
+                    });
+                }
+            });
+
+            document
+                .getElementById("save-button")
+                .addEventListener("click", function () {
+                    document.getElementById("download-json").disabled = false;
+                });
+
+            // fill the decontext input box with the selected sentence if we click on the 'copy' button
+            document
+                .getElementById("copy-button")
+                .addEventListener("click", function () {
+                    // The content should only begin from a letter, so [3:]
+                    document.getElementById("selected-sentence-decontext").value =
+                        document.getElementById("selected-sentence").textContent.slice(3);
+                });
+
+            function drawClaims(claim) {
+                const claimId = `statement${Object.keys(claims).length + 1}`;
+                claims[claimId] = {
+                    text: "",
+                    claimType: null,
+                    isImportant: "",
+                    belong_to_sentence: currentSentenceId,
+                };
+                let local_claim_id = 0;
+                // local claim is the number of claims with the same sentence id
+                for (let key in claims) {
+                    if (claims[key].belong_to_sentence === currentSentenceId) {
+                        local_claim_id += 1;
+                    }
+                }
+
+                const claimDiv = document.createElement("div");
+                claimDiv.classList.add("claim");
+                claimDiv.id = claimId;
+
+                const claimHeader = document.createElement("p");
+                claimHeader.classList.add("claim-header");
+                claimHeader.textContent = `Statement ${local_claim_id}`;
+                claimDiv.appendChild(claimHeader);
+
+                if (claim != null) {
+                    const statementClaiming = document.createElement("p");
+                    statementClaiming.textContent = claim;
+                    claimDiv.appendChild(statementClaiming);
+                }
+
+                console.log(local_claim_id);
+
+                const flexDiv = document.createElement("div");
+                flexDiv.classList.add("flex");
+                claimDiv.appendChild(flexDiv);
+
+                const inputField = document.createElement("input");
+                inputField.type = "text";
+                inputField.placeholder = "Input claim";
+                inputField.oninput = (e) => {
+                    claims[claimId].text = e.target.value;
+                };
+                flexDiv.appendChild(inputField);
+
+                if (claim != null) {
+                    const copyButton = document.createElement("button");
+                    copyButton.classList.add("btn", "waves-effect", "waves-light");
+                    copyButton.innerText = "Copy";
+                    copyButton.onclick = () => {
+                        inputField.value = claim;
+                        claims[claimId].text = inputField.value;
+                    };
+                    flexDiv.appendChild(copyButton);
+                }
+
+                const claimCheckLabel = document.createElement("p");
+                claimCheckLabel.textContent = "What type of claim is this statement?";
+                claimDiv.appendChild(claimCheckLabel);
+
+                const claimCheckFactLabel = document.createElement("label");
+                claimCheckFactLabel.innerHTML = `<input name="claimCheck${claimId}" type="radio" value="factual" /><span>Factual Claim</span>`;
+                claimCheckFactLabel.onchange = () => {
+                    claims[claimId].claimType = "factual";
+                };
+                claimDiv.appendChild(claimCheckFactLabel);
+
+                const claimCheckOpinionLabel = document.createElement("label");
+                claimCheckOpinionLabel.innerHTML = `<input name="claimCheck${claimId}" type="radio" value="opinion" /><span>Opinion</span>`;
+                claimCheckOpinionLabel.onchange = () => {
+                    claims[claimId].claimType = "opinion";
+                };
+                claimDiv.appendChild(claimCheckOpinionLabel);
+
+                const claimCheckNotAClaimLabel = document.createElement("label");
+                claimCheckNotAClaimLabel.innerHTML = `<input name="claimCheck${claimId}" type="radio" value="not_a_Claim" /><span>Not a Claim (e.g. a question)</span>`;
+                claimCheckNotAClaimLabel.onchange = () => {
+                    claims[claimId].claimType = "not_a_claim";
+                };
+                claimDiv.appendChild(claimCheckNotAClaimLabel);
+
+                const claimCheckOtherLabel = document.createElement("label");
+                claimCheckOtherLabel.innerHTML = `<input name="claimCheck${claimId}" type="radio" value="other" /><span>Other (e.g. I'm a language model...)</span>`;
+                claimCheckOtherLabel.onchange = () => {
+                    claims[claimId].claimType = "other";
+                };
+                claimDiv.appendChild(claimCheckOtherLabel);
+
+                const mostImportantClaimHeading = document.createElement("p");
+                mostImportantClaimHeading.textContent = "Is the statement one of the most important statements in this sentence?";
+                claimDiv.appendChild(mostImportantClaimHeading);
+
+                const mostImportantClaimYesLabel = document.createElement("label");
+                mostImportantClaimYesLabel.innerHTML = `<input name="important${claimId}" type="radio" value="yes" /><span>Yes</span>`;
+                mostImportantClaimYesLabel.onchange = () => {
+                    claims[claimId].isImportant = "yes";
+                };
+                claimDiv.appendChild(mostImportantClaimYesLabel);
+
+                const mostImportantClaimIntermediateLabel = document.createElement("label");
+                mostImportantClaimIntermediateLabel.innerHTML = `<input name="important${claimId}" type="radio" value="intermediate" /><span>No, intermediate</span>`;
+                mostImportantClaimIntermediateLabel.onchange = () => {
+                    claims[claimId].isImportant = "intermediate";
+                };
+                claimDiv.appendChild(mostImportantClaimIntermediateLabel);
+
+                const mostImportantClaimNoLabel = document.createElement("label");
+                mostImportantClaimNoLabel.innerHTML = `<input name="important${claimId}" type="radio" value="no" /><span>No, not important</span>`;
+                mostImportantClaimNoLabel.onchange = () => {
+                    claims[claimId].isImportant = "no";
+                };
+                claimDiv.appendChild(mostImportantClaimNoLabel);
+
+                const removeClaimButton = document.createElement("button");
+                removeClaimButton.style.margin = "10px";
+                removeClaimButton.textContent = "Remove";
+                removeClaimButton.onclick = () => {
+                    delete claims[claimId];
+                    claimDiv.remove();
+                };
+                // class is btn, waves-effect, waves-light
+                removeClaimButton.classList.add("btn", "waves-effect", "waves-light");
+                // red font
+                removeClaimButton.classList.add("red");
+                claimDiv.appendChild(removeClaimButton);
+
+                document.getElementById("claims").appendChild(claimDiv);
+            }
+
+            function saveData(sentenceId) {
+                // the values below are taken from the claims with belong_to_sentence = sentenceId
+                claims_text = [];
+                claims_bool = [];
+                claims_important = [];
+                // iterate through the claims and add the text and claimType to the arrays
+                Object.keys(claims).forEach((claimId) => {
+                    if (claims[claimId].belong_to_sentence == sentenceId) {
+                        claims_text.push(claims[claimId].text);
+                        claims_bool.push(claims[claimId].claimType);
+                        claims_important.push(claims[claimId].isImportant);
+                    }
+                });
+                sentencesData[sentenceId] = {
+                    decontext: args.decontext,
+                    Most_importance_sentence: args.importantCheck,
+                    factCheck: args.factCheck,
+                    Claims: claims_text,
+                    boolClaim: claims_bool,
+                    Most_important_claim: claims_important,
+                };
+                checkDownloadAvailability();
+            }
+
+            function checkDownloadAvailability() {
+                // Unconditionally enable download button
+                document.getElementById("download-json").disabled = false;
+                document.getElementById("download-json").onclick = () =>
+                    downloadCombinedJSON();
+            }
+
+            function downloadCombinedJSON() {
+                const outputBlob = new Blob([JSON.stringify(sentencesData, null, 4)], {
+                    type: "application/json",
+                });
+
+                const outputLink = document.createElement("a");
+                outputLink.href = URL.createObjectURL(outputBlob);
+                outputLink.download = `${fileName}_output.json`;
+                outputLink.click();
+            }
+        }
+    </script>
+</body>
+
+</html>

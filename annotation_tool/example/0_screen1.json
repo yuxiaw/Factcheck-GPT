@@ -1,0 +1,24 @@
+{
+    "prompt": "Who was the oldest justice on the US supreme court in 1980?",
+    "response": "In 1980, the oldest justice on the United States Supreme Court was Justice William O. Douglas. He was born on October 16, 1898, and served on the Supreme Court from 1939 until his retirement in 1975. Therefore, in 1980, Justice Douglas was still alive and would have been the oldest serving justice on the Court at that time.",
+    "sentences": [
+        "In 1980, the oldest justice on the United States Supreme Court was Justice William O. Douglas.",
+        "He was born on October 16, 1898, and served on the Supreme Court from 1939 until his retirement in 1975.",
+        "Therefore, in 1980, Justice Douglas was still alive and would have been the oldest serving justice on the Court at that time."
+    ],
+    "atomic claims": [
+        [
+            "In 1980, the oldest justice on the United States Supreme Court was Justice William O. Douglas."
+        ],
+        [
+            "Justice William O. Douglas was born on October 16, 1898.",
+            "Justice William O. Douglas served on the Supreme Court from 1939 until his retirement in 1975."
+        ],
+        [
+            "Therefore, in 1980, Justice Douglas was still alive.",
+            "Justice William O. Douglas would have been the oldest serving justice on the Court at that time."
+        ]
+    ],
+    "source": "post_and_in_house_question",
+    "id": 1
+}

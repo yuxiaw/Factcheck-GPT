@@ -1,0 +1,50 @@
+{
+  "sentence1": {
+    "decontext": "In 1980, the oldest justice on the United States Supreme Court was Justice William O. Douglas.",
+    "Most_importance_sentence": "yes",
+    "factCheck": "yes",
+    "Claims": [
+      "In 1980, the oldest justice on the United States Supreme Court was Justice William O. Douglas."
+    ],
+    "boolClaim": [
+      "factual"
+    ],
+    "Most_important_claim": [
+      "yes"
+    ]
+  },
+  "sentence2": {
+    "decontext": "Justice William O. Douglas was born on October 16, 1898, and served on the Supreme Court from 1939 until his retirement in 1975.",
+    "Most_importance_sentence": "intermediate",
+    "factCheck": "yes",
+    "Claims": [
+      "Justice William O. Douglas was born on October 16, 1898.",
+      "Justice William O. Douglas served on the United States Supreme Court from 1939 until his retirement in 1975."
+    ],
+    "boolClaim": [
+      "factual",
+      "factual"
+    ],
+    "Most_important_claim": [
+      "intermediate",
+      "yes"
+    ]
+  },
+  "sentence3": {
+    "decontext": "In 1980, Justice Douglas was still alive and would have been the oldest serving justice on the Court at that time.",
+    "Most_importance_sentence": "intermediate",
+    "factCheck": "yes",
+    "Claims": [
+      "In 1980, Justice William O. Douglas was still alive.",
+      "Justice William O. Douglas was the oldest serving justice on the United States Supreme Court in 1980."
+    ],
+    "boolClaim": [
+      "factual",
+      "factual"
+    ],
+    "Most_important_claim": [
+      "intermediate",
+      "yes"
+    ]
+  }
+}

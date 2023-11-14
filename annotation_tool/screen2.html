@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decontextualizer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" />
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #container {
+            display: flex;
+            width: 80%;
+        }
+
+        #left {
+            width: 50%;
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            padding-right: 1rem;
+        }
+
+        #evidences-and-claim-correction,
+        #revise-and-evidence {
+            display: none;
+        }
+
+        #next-sentence {
+            display: none;
+            flex-wrap: nowrap;
+            flex-direction: row;
+            justify-content: flex-end;
+            margin: 1.5rem 1.5rem 0.5rem;
+        }
+
+        #right {
+            width: 50%;
+            padding-left: 1rem;
+        }
+
+        #selected-sentence {
+            font-size: large;
+            font-weight: bold;
+        }
+
+        #relevant-evidence {
+            display: none;
+        }
+
+        #relevant-evidence-text {
+            height: 8rem;
+        }
+
+        #link-div {
+            display: flex;
+            flex-wrap: nowrap;
+            flex-direction: row;
+            gap: 10px;
+        }
+
+        #link:hover {
+            text-decoration: underline;
+        }
+
+        .highlight {
+            background-color: rgba(255, 235, 59, 0.5);
+        }
+
+        .sentence {
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+        }
+
+        .disable-sentence {
+            cursor: default;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .claim {
+            margin-bottom: 1rem;
+            display: grid;
+        }
+
+        .claim-header {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .flex {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .separator {
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="left">
+            <p id="prompt"></p>
+            <div id="claims"></div>
+            <div id="next-sentence">
+                <button class="btn waves-effect waves-light" id="next-sentence-button">
+                    Next Sentence
+                </button>
+            </div>
+            <p>Please upload a generated result json.</p>
+            <div class="file-field input-field">
+                <div class="btn">
+                    <span>Upload</span>
+                    <input id="fileUpload" type="file" />
+                </div>
+                <div class="file-path-wrapper">
+                    <input class="file-path validate" type="text" placeholder="Upload a JSON file" />
+                </div>
+            </div>
+        </div>
+        <div id="right">
+
+            <p>Plase select a claim by clicking it on the left.</p>
+            <p id="selected-sentence"></p>
+
+            <div id="evidences-and-claim-correction">
+                <!-- add a broad dark line for better illustration -->
+                <hr class="separator" />
+
+                <div id="evidences"></div>
+
+                <div id="check-claim-by-evidence">
+                    <p>Can you determine whether the claim is true or false by evidence above?</p>
+                    <label id="label-claim-check-yes">
+                        <input id="claim-check-yes" name="claim-check" type="radio" value="yes" />
+                        <span>Yes</span>
+                    </label>
+                    <label id="label-claim-check-no">
+                        <input id="claim-check-no" name="claim-check" type="radio" value="no" />
+                        <span>No</span>
+                    </label>
+                </div>
+                <div id="relevant-evidence">
+                    <p>Please search relevant evidence and add in the box below:</p>
+                    <textarea id="relevant-evidence-text" name="relevant-evidence-text">
+                    </textarea>
+                </div>
+                <hr class="separator" />
+                <div id="claim-need-correction">
+                    <p>Does this claim need to be corrected?</p>
+                    <label id="label-correction-yes">
+                        <input id="correction-yes" name="correction-check" type="radio" value="yes" />
+                        <span>Yes</span>
+                    </label>
+                    <label id="label-correction-no">
+                        <input id="correction-no" name="correction-check" type="radio" value="no" />
+                        <span>No</span>
+                    </label>
+                    <label id="label-correction-not-enough-evidence">
+                        <input id="correction-not-enough-evidence" name="correction-check" type="radio"
+                            value="not_enough_evidence" />
+                        <span>Not Enough Evidence</span>
+                    </label>
+                </div>
+
+                <div id="revise-and-evidence">
+                    <div class="flex">
+                        <input id="revise-the-claim" type="text" placeholder="Revise the claim:" />
+                        <button id="copy-button" class="btn waves-effect waves-light">
+                            Copy
+                        </button>
+                    </div>
+                    <div class="flex">
+                        <input id="evidence-index" type="text"
+                            placeholder="Evidence index that your revision depends on (text box):" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- add a broad dark line for better illustration -->
+            <hr style="border: 1px solid rgba(0, 0, 0, 0.1); margin: 1rem 0" />
+
+            <button id="save-button" class="btn waves-effect waves-light" disabled>
+                Save
+            </button>
+            <p id="error-message" style="color: red"></p>
+            <button id="download-json" class="btn waves-effect waves-light" disabled>
+                Download Combined JSON
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+        var fileName = ''
+        document
+            .getElementById("fileUpload")
+            .addEventListener("change", function (event) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+
+                fileName = file.name.substring(0, file.name.lastIndexOf('.'));
+
+                reader.onload = function (e) {
+                    const content = JSON.parse(e.target.result);
+                    handleFileContent(content);
+                };
+
+                reader.readAsText(file);
+            });
+
+        function handleFileContent(content) {
+            let temp;
+            let sentenceKey;
+            let sentenceKeyClone = null;
+            let claimKey;
+
+            findCheckWorthySentence(1);
+            document
+                .getElementById("next-sentence-button")
+                .addEventListener("click", function () {
+                    temp++;
+                    findCheckWorthySentence(temp);
+                    resetClaimCorrectionData();
+                    document.getElementById("evidences-and-claim-correction").style.display = 'none'
+
+                    if (temp == Object.keys(content).length) {
+                        document
+                            .getElementById("next-sentence-button").disabled = true;
+                    } else {
+                        document
+                            .getElementById("next-sentence-button").disabled = false;
+                    }
+                });
+            document
+                .getElementById("claim-check-yes")
+                .addEventListener("click", function () {
+                    document.getElementById("relevant-evidence").style.display = "none";
+                    document.getElementById("relevant-evidence-text").value = ''
+                    checkEvidenceAndCorrectionInputs()
+                });
+
+            document
+                .getElementById("claim-check-no")
+                .addEventListener("click", function () {
+                    document.getElementById("relevant-evidence").style.display = "block";
+                    document.getElementById("relevant-evidence-text").value = ''
+                    checkEvidenceAndCorrectionInputs();
+                });
+            document
+                .getElementById("correction-yes")
+                .addEventListener("click", function () {
+                    document.getElementById("revise-and-evidence").style.display = "block";
+                    checkEvidenceAndCorrectionInputs();
+                });
+            document
+                .getElementById("correction-no")
+                .addEventListener("click", function () {
+                    document.getElementById("revise-the-claim").value = ''
+                    document.getElementById("evidence-index").value = ''
+                    document.getElementById("revise-and-evidence").style.display = "none";
+                    checkEvidenceAndCorrectionInputs();
+                });
+
+            document
+                .getElementById("correction-not-enough-evidence")
+                .addEventListener("click", function () {
+                    document.getElementById("revise-the-claim").value = ''
+                    document.getElementById("evidence-index").value = ''
+                    document.getElementById("revise-and-evidence").style.display = "none";
+                    checkEvidenceAndCorrectionInputs();
+                });
+
+            function checkEvidenceAndCorrectionInputs() {
+                if (document.querySelector(
+                    "input[name='correction-check']:checked"
+                ) === null || document.querySelector(
+                    "input[name='claim-check']:checked"
+                ) === null) {
+                    document.getElementById('save-button').disabled = true;
+                }
+                else if (document.getElementById("claim-check-no").checked === true &&
+                    document.getElementById("relevant-evidence-text").value === '') {
+                    document.getElementById('save-button').disabled = true;
+                }
+                else if (document.getElementById("correction-yes").checked === true &&
+                    document.getElementById("revise-the-claim").value === '' &&
+                    document.getElementById("evidence-index").value === '') {
+                    document.getElementById('save-button').disabled = true;
+                } else {
+                    document.getElementById('save-button').disabled = false;
+                }
+            }
+
+            document
+                .getElementById("copy-button")
+                .addEventListener("click", function () {
+                    // The content should only begin from a letter, so [1:]
+                    document.getElementById("revise-the-claim").value =
+                        document.getElementById("selected-sentence").textContent.slice(3);
+                });
+
+            function resetClaimCorrectionData() {
+                document.getElementById("claim-check-yes").checked = null
+                document.getElementById("claim-check-no").checked = null
+                document.getElementById("correction-yes").checked = null
+                document.getElementById("correction-no").checked = null
+                document.getElementById("correction-not-enough-evidence").checked = null
+                document.getElementById("relevant-evidence-text").value = ''
+                document.getElementById("revise-the-claim").value = ''
+                document.getElementById("evidence-index").value = ''
+                document.getElementById("relevant-evidence").style.display = 'none';
+                document.getElementById("revise-and-evidence").style.display = 'none';
+            }
+
+            function findCheckWorthySentence(num) {
+                for (let i = num; i <= Object.keys(content).length; i++) {
+                    sentenceKey = `sentence${i}`;
+                    if (content[sentenceKey].factCheck === 'yes') {
+                        document.getElementById("prompt").textContent = content[sentenceKey].decontext;
+                        document
+                            .getElementById("next-sentence").style.display = 'flex';
+
+                        const claims = content[sentenceKey].Claims;
+                        const boolClaims = content[sentenceKey].boolClaim
+                        const evidences = content[sentenceKey].evidence
+                        const urls = content[sentenceKey].url
+
+                        const leftDiv = document.getElementById("claims");
+                        let currentClaimId = "";
+
+                        document.getElementById("claims").innerHTML = ""
+                        document.getElementById("selected-sentence").innerHTML = ""
+                        document.getElementById("evidences").innerHTML = ""
+
+                        claims.forEach((claim, index) => {
+                            const claimId = `claim${index + 1}`;
+                            const p = document.createElement("p");
+                            p.textContent = `${index + 1}. ${claim.trim()}`;
+                            p.id = claimId;
+                            if (boolClaims[index] !== 'factual') {
+                                p.classList.add("disable-sentence");
+                            } else {
+                                p.classList.add("sentence");
+                            }
+                            p.onclick = () => {
+                                if (currentClaimId) {
+                                    document
+                                        .getElementById(currentClaimId)
+                                        .classList.remove("highlight");
+                                }
+                                p.classList.add("highlight");
+                                currentClaimId = claimId;
+                                claimKey = index
+                                document.getElementById("selected-sentence").textContent =
+                                    p.textContent;
+                                document
+                                    .getElementById("evidences-and-claim-correction").style.display = 'block';
+                                resetClaimCorrectionData();
+
+                                const evidenceDiv = document.getElementById("evidences");
+                                const evidence = evidences[index]
+                                const url = urls[index]
+                                evidenceDiv.innerHTML = ""
+
+                                evidence.forEach((e, index) => {
+                                    const parentDiv = document.createElement("div");
+                                    parentDiv.classList.add("evidence");
+                                    const evidenceId = document.createElement("p");
+                                    evidenceId.textContent = `Evidence ${index + 1}`;
+                                    evidenceId.style.fontWeight = "bold";
+                                    const p1 = document.createElement("p");
+                                    p1.textContent = `${e.trim()}`;
+                                    const p2 = document.createElement("p");
+                                    p2.style.margin = 0;
+                                    p2.textContent = "Link:";
+                                    const p3 = document.createElement("a");
+                                    p3.id = "link";
+                                    p3.setAttribute("target", "_blank");
+                                    p3.href = url[index];
+                                    p3.textContent = url[index];
+                                    const linkDiv = document.createElement("div");
+                                    linkDiv.id = "link-div";
+                                    linkDiv.append(p2, p3);
+                                    const p4 = document.createElement("p");
+                                    p4.textContent = `Does this evidence support the claim?`;
+
+                                    const input1 = document.createElement("input");
+                                    input1.type = "radio";
+                                    input1.id = `completely-support-${index}`;
+                                    input1.name = `stance-${index}`;
+                                    input1.value = 'completely-support';
+                                    const span1 = document.createElement("span");
+                                    span1.textContent = "Completely support";
+                                    const label1 = document.createElement("label");
+                                    label1.id = `label-completely-support-${index}`;
+                                    label1.append(input1, span1);
+
+                                    const input2 = document.createElement("input");
+                                    input2.type = "radio";
+                                    input2.id = `partially-support-${index}`;
+                                    input2.name = `stance-${index}`;
+                                    input2.value = 'partially-support';
+                                    const span2 = document.createElement("span");
+                                    span2.textContent = "Partially support";
+                                    const label2 = document.createElement("label");
+                                    label2.id = `label-partially-support-${index}`;
+                                    label2.append(input2, span2);
+
+                                    const input3 = document.createElement("input");
+                                    input3.type = "radio";
+                                    input3.id = `refute-${index}`;
+                                    input3.name = `stance-${index}`;
+                                    input3.value = 'refute';
+                                    const span3 = document.createElement("span");
+                                    span3.textContent = "Refute";
+                                    const label3 = document.createElement("label");
+                                    label3.id = `label-refute-${index}`;
+                                    label3.append(input3, span3);
+
+                                    const input4 = document.createElement("input");
+                                    input4.type = "radio";
+                                    input4.id = `irrelevant-${index}`;
+                                    input4.name = `stance-${index}`;
+                                    input4.value = 'irrelevant';
+                                    const span4 = document.createElement("span");
+                                    span4.textContent = "Irrelevant";
+                                    const label4 = document.createElement("label");
+                                    label4.id = `label-irrelevant-${index}`;
+                                    label4.append(input4, span4);
+
+                                    const separator = document.createElement("hr");
+                                    separator.classList.add("separator");
+
+                                    const childDiv = document.createElement("div");
+                                    childDiv.append(label1, label2, label3, label4);
+                                    parentDiv.append(evidenceId, p1, linkDiv, p4, childDiv, separator);
+                                    evidenceDiv.append(parentDiv);
+                                });
+                            };
+                            leftDiv.appendChild(p);
+                        });
+                        temp = i;
+                        break;
+                    }
+                }
+            }
+
+            let stances = [];
+            let ifEvidenceEnough = [];
+            let humanEvidence = [];
+            let boolEdit = [];
+            let revisedClaims = [];
+            let usedEvidence = [];
+            const args = {};
+            const sentencesData = {};
+
+            document.getElementById("relevant-evidence-text").addEventListener("input", checkInputs);
+            document.getElementById("revise-the-claim").addEventListener("input", checkInputs);
+            document.getElementById("evidence-index").addEventListener("input", checkInputs);
+
+            document
+                .getElementById("save-button")
+                .addEventListener("click", function () {
+                    args["decontext"] = content[sentenceKey].decontext;
+                    args["factCheck"] = content[sentenceKey].factCheck;
+                    args["importantCheck"] = content[sentenceKey].Most_importance_sentence;
+                    args["claims"] = content[sentenceKey].Claims;
+                    args["boolClaim"] = content[sentenceKey].boolClaim;
+                    args["evidence"] = content[sentenceKey].evidence;
+                    args["mostImportantClaim"] = content[sentenceKey].Most_important_claim;
+                    saveData(sentenceKey);
+                });
+
+            document
+                .getElementById("save-button")
+                .addEventListener("click", function () {
+                    document.getElementById("download-json").disabled = false;
+                });
+
+            function checkInputs() {
+                if (document.getElementById("claim-check-no").checked === true &&
+                    document.getElementById("correction-yes").checked === true) {
+                    if (document.getElementById("revise-the-claim").value !== "" && document.getElementById("evidence-index").value !== "" && document.getElementById("relevant-evidence-text").value !== "") {
+                        document.getElementById('save-button').disabled = false;
+                    } else {
+                        document.getElementById('save-button').disabled = true;
+                    }
+                }
+                else {
+                    if (document.getElementById("revise-the-claim").value !== "" && document.getElementById("evidence-index").value !== "") {
+                        document.getElementById('save-button').disabled = false;
+                    } else if (document.getElementById("relevant-evidence-text").value !== "") {
+                        document.getElementById('save-button').disabled = false;
+                    } else {
+                        document.getElementById('save-button').disabled = true;
+                    }
+                }
+            }
+
+            function saveData(sentenceId) {
+                if (sentenceId !== sentenceKeyClone) {
+                    stances = []
+                    ifEvidenceEnough = []
+                    humanEvidence = []
+                    boolEdit = []
+                    revisedClaims = []
+                    usedEvidence = []
+                }
+                sentenceKeyClone = sentenceId
+                if (stances.length === 0) {
+                    Object.keys(args.claims).forEach((claim, index) => {
+                        stances.push([])
+                        ifEvidenceEnough.push("NA")
+                        humanEvidence.push("NA")
+                        boolEdit.push("NA")
+                        revisedClaims.push(args.claims[index])
+                        usedEvidence.push("NA")
+                    });
+                }
+
+                stances[claimKey] = [];
+                args.evidence[claimKey].forEach((e, i) => {
+                    stances[claimKey].push(document.querySelector(
+                        `input[name='stance-${i}']:checked`
+                    )?.value)
+                })
+
+                ifEvidenceEnough[claimKey] = document.querySelector(
+                    "input[name='claim-check']:checked"
+                ).value;
+
+                boolEdit[claimKey] = document.querySelector(
+                    "input[name='correction-check']:checked"
+                ).value;
+
+                if (ifEvidenceEnough[claimKey] === 'no') {
+                    humanEvidence[claimKey] = document.getElementById("relevant-evidence-text").value
+                }
+                if (boolEdit[claimKey] === 'yes') {
+                    revisedClaims[claimKey] = document.getElementById("revise-the-claim").value
+                    usedEvidence[claimKey] = document.getElementById("evidence-index").value
+                } else if ((boolEdit[claimKey] === 'no') || (boolEdit[claimKey] === 'not_enough_evidence')) {
+                    usedEvidence[claimKey] = "-1"
+                }
+
+                sentencesData[sentenceId] = {
+                    decontext: args.decontext,
+                    factCheck: args.factCheck,
+                    Most_importance_sentence: args.importantCheck,
+                    Claims: args.claims,
+                    boolClaim: args.boolClaim,
+                    if_evidence_enough: ifEvidenceEnough,
+                    human_evidence: humanEvidence,
+                    evidence: args.evidence,
+                    stances: stances,
+                    boolEdit: boolEdit,
+                    revised_Claims: revisedClaims,
+                    usedEvidence: usedEvidence,
+                    Most_important_claim: args.mostImportantClaim
+                };
+                checkDownloadAvailability();
+            }
+
+            function checkDownloadAvailability() {
+                // Unconditionally enable download button
+                document.getElementById("download-json").disabled = false;
+                document.getElementById("download-json").onclick = () =>
+                    downloadCombinedJSON();
+            }
+
+            function downloadCombinedJSON() {
+                const outputBlob = new Blob([JSON.stringify(sentencesData, null, 4)], {
+                    type: "application/json",
+                });
+
+                const outputLink = document.createElement("a");
+                outputLink.href = URL.createObjectURL(outputBlob);
+                outputLink.download = `${fileName}_output.json`;
+                outputLink.click();
+            }
+        }
+    </script>
+</body>
+
+</html>

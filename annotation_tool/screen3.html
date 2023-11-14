@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decontextualizer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" />
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #container {
+            display: flex;
+            width: 80%;
+        }
+
+        #left {
+            width: 50%;
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            padding-right: 1rem;
+        }
+
+        #right {
+            width: 50%;
+            padding-left: 1rem;
+        }
+
+        #selected-sentence {
+            font-size: medium;
+            font-weight: bold;
+        }
+
+        #flex-div {
+            display: none;
+        }
+
+        #merge-claims-div {
+            margin-bottom: 15px;
+            font-size: 14px;
+            display: none;
+        }
+
+        #all-revised-claims {
+            height: 8rem;
+        }
+
+        .text-heading {
+            font-weight: 600;
+        }
+
+        .highlight {
+            background-color: rgba(255, 235, 59, 0.5);
+            display: block !important;
+        }
+
+        .rclaims {
+            display: none;
+            margin-left: 20px;
+        }
+
+        .sentence {
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+        }
+
+        .claim {
+            margin-bottom: 1rem;
+            display: grid;
+        }
+
+        .claim-header {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .flex {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .separator {
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="left">
+            <p id="prompt"></p>
+            <div id="sentences"></div>
+            <p>Please upload a generated result json.</p>
+            <div class="file-field input-field">
+                <div class="btn">
+                    <span>Upload</span>
+                    <input id="fileUpload" type="file" />
+                </div>
+                <div class="file-path-wrapper">
+                    <input class="file-path validate" type="text" placeholder="Upload a JSON file" />
+                </div>
+            </div>
+        </div>
+        <div id="right">
+            <p>Please select a sentence by clicking it on the left.</p>
+
+            <!-- add a broad dark line for better illustration -->
+            <hr style="border: 1px solid rgba(0, 0, 0, 0.1); margin: 1rem 0" />
+
+            <div id="revised-claims">
+            </div>
+
+            <div id="sentence-data">
+            </div>
+
+            <div id="flex-div">
+                <p class="text-heading">Please deduplicate information and make the sentence coherent:</p>
+                <div class="flex">
+                    <input type="text" id="sentence-input">
+                    <button id="copy-button" class="btn waves-effect waves-light">Copy</button>
+                </div>
+            </div>
+
+            <div id="merge-claims-div">
+                <p class="text-heading">Please Merge All Revised Sentences, duplicate and make coherent:</p>
+                <textarea id="all-revised-claims" name="all-revised-claims"></textarea>
+                <button id="merge-button" class="btn waves-effect waves-light">
+                    Merge All
+                </button>
+            </div>
+            <button id="save-button" class="btn waves-effect waves-light" disabled>
+                Save
+            </button>
+            <button id="next-button" class="btn waves-effect waves-light" disabled>
+                Next Sentence
+            </button>
+            <p id="error-message" style="color: red"></p>
+            <button id="download-json" class="btn waves-effect waves-light" disabled>
+                Download Combined JSON
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+        var fileName = ''
+        document
+            .getElementById("fileUpload")
+            .addEventListener("change", function (event) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+
+                fileName = file.name.substring(0, file.name.lastIndexOf('.'));
+
+                reader.onload = function (e) {
+                    const content = JSON.parse(e.target.result);
+                    handleFileContent(content);
+                };
+
+                reader.readAsText(file);
+            });
+
+        function handleFileContent(content) {
+            document.getElementById("prompt").textContent = content.prompt;
+            const sentences = content.sentences;
+            const leftDiv = document.getElementById("sentences");
+
+            const sentenceDiv = document.getElementById("sentence-data");
+
+            const selectedSentence = document.createElement("p");
+            selectedSentence.id = "selected-sentence";
+
+            const selectedSentenceClaims = document.createElement("p")
+            selectedSentenceClaims.id = "selected-sentence-claims";
+
+            sentenceDiv.append(selectedSentence, selectedSentenceClaims);
+
+            const revisedClaimsDiv = document.getElementById("revised-claims");
+            const inputField = document.getElementById("sentence-input");
+            const mergeClaimsDiv = document.getElementById("merge-claims-div");
+            const allRevisedClaims = document.getElementById('all-revised-claims');
+            let sentenceKey = "";
+            let currentSentenceId = "";
+            let sentenceIndex = null;
+            let nextsentenceIndex = null;
+            let mergeAll = "";
+            let merge_button_clicked = false;
+            
+            const args = {};
+            const sentencesData = {};
+            let data = {};
+
+            for (const sentenceId in sentences) {
+                if (sentences.hasOwnProperty(sentenceId)) {
+                    const sentenceData = sentences[sentenceId];
+                    const sentence = document.createElement("p");
+                    const rClaims = document.createElement("div");
+                    rClaims.classList.add("rclaims");
+                    rClaims.id = `${sentenceId}-rclaims`;
+                    sentence.textContent = `${sentenceId[sentenceId.length - 1]}. ${sentenceData.text.trim()}`;
+                    sentence.id = sentenceId;
+                    sentence.classList.add("sentence");
+
+                    if (sentenceData.hasOwnProperty('revised_Claims')) {
+                        const value = sentenceData['revised_Claims'];
+                        if (Array.isArray(value) && value.length > 0) {
+                            sentenceData.revised_Claims.forEach((c, index) => {
+                                const claimId = `claim${index + 1}`;
+                                const claim = document.createElement("p");
+                                const letter = String.fromCharCode(97 + index);
+                                claim.textContent = `${letter}. ${c.trim()}`;
+                                claim.id = claimId;
+                                rClaims.appendChild(claim);
+                            })
+                        }
+                    }
+
+                    sentence.onclick = () => {
+                        removeHighlight();
+                        sentence.classList.add("highlight");
+                        sentenceKey = currentSentenceId = sentenceId;
+                        sentenceIndex = currentSentenceId[currentSentenceId.length - 1]
+                        nextsentenceIndex = parseInt(sentenceIndex)
+                        document.getElementById(currentSentenceId + "-rclaims").classList.add("highlight");
+                        selectedSentence.textContent =
+                            `Sentence ${sentence.textContent[0]}:`
+                        inputField.value = "";
+                        sentenceDiv.style.display = 'block';
+                        document.getElementById("next-button").disabled = true;
+                        if (sentenceData.hasOwnProperty('revised_Claims')) {
+                            const value = sentenceData['revised_Claims'];
+                            if (Array.isArray(value) && value.length > 0) {
+                                selectedSentenceClaims.textContent = value.join(" ")
+
+                                if (!isElementExist(`${sentenceKey}-claims`)) {
+                                    document.getElementById('flex-div').style.display = 'block';
+                                    inputField.onchange = () => {
+                                        if (inputField.value !== "") {
+                                            document
+                                                .getElementById("save-button").disabled = false;
+                                        } else {
+                                            document
+                                                .getElementById("save-button").disabled = true;
+                                        }
+                                    };
+                                }
+
+                                document.getElementById("copy-button").onclick = () => {
+                                    inputField.value = selectedSentenceClaims.textContent
+                                    if (inputField.value !== "") {
+                                        document
+                                            .getElementById("save-button").disabled = false;
+                                    }
+                                }
+                            }
+                        } else {
+                            selectedSentenceClaims.textContent = ""
+                            document.getElementById('flex-div').style.display = 'none';
+                            document.getElementById("save-button").disabled = false;
+                        }
+                    };
+                    leftDiv.appendChild(sentence);
+                    leftDiv.appendChild(rClaims);
+
+                }
+            }
+
+            document
+                .getElementById("save-button")
+                .addEventListener("click", function () {
+                    args["text"] = content.sentences[sentenceKey].text;
+                    args["decontext"] = content.sentences[sentenceKey].decontext;
+                    args["factCheck"] = content.sentences[sentenceKey].factCheck;
+                    args["importantCheck"] = content.sentences[sentenceKey].Most_importance_sentence;
+                    args["claims"] = content.sentences[sentenceKey].Claims;
+                    args["boolClaim"] = content.sentences[sentenceKey].boolClaim;
+                    args["evidence"] = content.sentences[sentenceKey].evidence;
+                    args["stances"] = content.sentences[sentenceKey].stances;
+                    args["boolEdit"] = content.sentences[sentenceKey].boolEdit;
+                    args["revisedClaims"] = content.sentences[sentenceKey].revised_Claims;
+                    args["usedEvidence"] = content.sentences[sentenceKey].usedEvidence;
+                    args["mostImportantClaim"] = content.sentences[sentenceKey].Most_important_claim;
+                    saveData(sentenceKey);
+                    document.getElementById("download-json").disabled = false;
+                    if (nextsentenceIndex < Object.keys(content.sentences).length) {
+
+                        document.getElementById("next-button").disabled = false;
+                    } else {
+                        mergeClaimsDiv.style.display = 'block';
+                        document.getElementById("next-button").style.display = 'none';
+                    }
+                });
+
+            document
+                .getElementById("next-button")
+                .addEventListener("click", function () {
+                    sentenceIndex = currentSentenceId[currentSentenceId.length - 1]
+                    nextsentenceIndex = parseInt(sentenceIndex) + 1
+                    removeHighlight();
+                    const nextSentence = document.getElementById("sentence" + nextsentenceIndex);
+                    nextSentence.classList.add("highlight");
+                    sentenceKey = currentSentenceId = sentenceId = `sentence${nextsentenceIndex}`;
+                    document.getElementById(currentSentenceId + "-rclaims").classList.add("highlight");
+                    selectedSentence.textContent =
+                        `Sentence ${nextsentenceIndex}:`
+                    sentenceDiv.style.display = 'block';
+                    if (sentences[sentenceId].hasOwnProperty('revised_Claims')) {
+                        const value = sentences[sentenceId].revised_Claims;
+                        if (Array.isArray(value) && value.length > 0) {
+                            selectedSentenceClaims.textContent = value.join(" ")
+
+                            if (!isElementExist(`${sentenceKey}-claims`)) {
+                                document.getElementById('flex-div').style.display = 'block';
+                                inputField.onchange = () => {
+                                    if (inputField.value !== "") {
+                                        document
+                                            .getElementById("save-button").disabled = false;
+                                    } else {
+                                        document
+                                            .getElementById("save-button").disabled = true;
+                                    }
+                                };
+                            }
+                        }
+                    } else {
+                        selectedSentenceClaims.textContent = ""
+                        document.getElementById("save-button").disabled = false;
+                    }
+                    document.getElementById("next-button").disabled = true;
+                });
+
+            document.getElementById("merge-button").addEventListener
+                ("click", function () {
+                    merge_button_clicked = true;
+                    allRevisedClaims.value = mergeAll.trim();
+                    document.getElementById("save-button").disabled = false;
+                });
+
+            function isElementExist(elementId) {
+                var element = document.getElementById(elementId);
+                return (element !== null && element !== undefined);
+            }
+
+            function removeHighlight() {
+                if (currentSentenceId) {
+                    document
+                        .getElementById(currentSentenceId)
+                        .classList.remove("highlight");
+                    document.getElementById(currentSentenceId + "-rclaims").classList.remove("highlight");
+                }
+            }
+
+            function saveData(sentenceKey) {
+                const sentenceInput = document.getElementById('sentence-input')
+                if (!isElementExist(`${sentenceKey}-claims`)) {
+                    const h = document.createElement("p");
+                    h.style.fontWeight = 'bold';
+                    h.textContent = selectedSentence.textContent;
+
+                    const p = document.createElement("p");
+                    p.id = `${sentenceKey}-claims`;
+                    p.textContent = sentenceInput.value;
+
+                    const separator = document.createElement("hr");
+                    separator.classList.add("separator");
+                    revisedClaimsDiv.append(h, p, separator);
+                }
+                mergeAll = [mergeAll, sentenceInput.value].join(" ");
+
+                sentenceDiv.style.display = 'none';
+                document.getElementById('flex-div').style.display = 'none';
+                document.getElementById("save-button").disabled = true;
+
+                // only do this if the merge button is not clicked
+                if (!merge_button_clicked) {
+                        sentencesData[sentenceKey] = {
+                        text: args.text,
+                        revised_sentence: sentenceInput.value,
+                        decontext: args.decontext,
+                        factCheck: args.factCheck,
+                        Most_importance_sentence: args.importantCheck,
+                        Claims: args.claims,
+                        boolClaim: args.boolClaim,
+                        evidence: args.evidence,
+                        stances: args.stances,
+                        boolEdit: args.boolEdit,
+                        revised_Claims: args.revisedClaims,
+                        usedEvidence: args.usedEvidence,
+                        Most_important_claim: args.mostImportantClaim
+                    };
+                }
+                
+                data = {
+                    prompt: content.prompt,
+                    response: content.response,
+                    revised_response: allRevisedClaims.value,
+                    sentences: sentencesData,
+                };
+                sentenceInput.value = "";
+                checkDownloadAvailability();
+            }
+
+            function checkDownloadAvailability() {
+                // Unconditionally enable download button
+                document.getElementById("download-json").disabled = false;
+                document.getElementById("download-json").onclick = () =>
+                    downloadCombinedJSON();
+            }
+
+            function downloadCombinedJSON() {
+                const outputBlob = new Blob([JSON.stringify(data, null, 4)], {
+                    type: "application/json",
+                });
+
+                const outputLink = document.createElement("a");
+                outputLink.href = URL.createObjectURL(outputBlob);
+                outputLink.download = `${fileName}_output.json`;
+                outputLink.click();
+            }
+        }
+    </script>
+</body>
+
+</html>
