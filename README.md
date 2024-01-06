@@ -62,7 +62,7 @@ opinion-claims + 1 not-a-claim
 We release the [annotation tool](https://github.com/yuxiaw/Factcheck-GPT/tree/main/annotation_tool) in this repository.
 
 ## FactBench
-We further gather another three human-annotated datasets (FacTool-KB, FELM-WK, HaluEval) that are used to evaluate the effectiveness of automatic fact-checkers, resulting in [FactBench](https://github.com/yuxiaw/Factcheck-GPT/blob/main/factbench.jsonl) with 4,835 examples.
+We further gather another three human-annotated datasets (FacTool-KB, FELM-WK, HaluEval) that are used to evaluate the effectiveness of automatic fact-checkers, resulting in [FactBench](https://github.com/yuxiaw/Factcheck-GPT/blob/main/Factbench.jsonl) with 4,835 examples.
 
 # Baselines
 We set five subtasks and show the subtask 4: verfication below. See details in notebook: reproduce_tutorial.
